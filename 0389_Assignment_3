@@ -1,0 +1,207 @@
+/*
+uin: 0389
+Assignment: Assignment_3
+CID: 4610
+*/
+import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+import javax.print.event.PrintJobAttributeListener;
+
+public class Garden {
+
+	int Dugs = 0; // Creates the shared resources between  
+	int Planter = 0; // the three threads Jordan, Tracy, and Charles
+	int Filler = 0;
+//only allows 10 for all ints
+	Object[] hole = new Object[10]; 
+	//creates lock
+	final Lock lock = new ReentrantLock(); 
+    //lock conditions
+	final Condition Digging = lock.newCondition(); 
+	final Condition Planting = lock.newCondition(); 
+	final Condition Filling = lock.newCondition();
+        //this is the process for the wait to dig. When jordan has dug to many holes 
+        //he has to wait for his max number to decrease before he can did another
+	public void waitToDig() throws InterruptedException {
+		lock.lock();
+		try {
+			while (Dugs - Planter >= 5 || Dugs == hole.length) { //Checks that there is a maximum of 5
+				System.out.println("Jordan is waiting to dig a hole."); // holes dug 
+                                //makes jordan wait if condition is not met
+				Digging.await(); 
+			}
+                        //signal planting
+			Planting.signal();
+		} finally {
+			lock.unlock();
+		}
+	}
+	// this trys to dig. if it is able to dig it increments the number of 
+        //holes the prints jordan has dug and thing it signals the plant operation and releases the lock
+	public void dig() throws InterruptedException {
+            //lock is aquired
+		lock.lock(); 
+		try {
+			hole[Dugs] = "is Digging"; 
+			Dugs++;	
+			System.out.println("Jordan dug a hole.        \t\t\t" + Dugs ); 
+			Planting.signal(); 
+		} finally {
+			lock.unlock(); 
+		}
+	}
+        //this is the wait to plant process it it checks to see of there is a 
+        //unfilled hole that needs to be planted
+        //indicates that the process is waiting to plant
+        //signal for filling
+        //then releases the lock
+	public void waitToPlant() throws InterruptedException{
+		lock.lock();
+		try {
+			while(Planter >= Dugs || Planter == hole.length) { 
+			System.out.println("Charles is waiting to plant a hole.");
+			Planting.await(); 
+			}
+			Filling.signal(); 
+		}finally {
+			lock.unlock();
+		}
+	}
+	//this gets the lock plants for charles and then signals for digging
+        //then it releases the lock
+	public void plant() throws InterruptedException {
+		lock.lock(); 
+		try {
+			hole[Planter] = "is Planted"; 
+			Planter++; 
+			System.out.println("Charles planted a hole.  \t" + Planter);
+			Filling.signal();
+		} finally {
+			lock.unlock(); 
+		}
+		
+	}
+        // requires the lock
+        //checks to see if there are holes that need to be filled
+        //signals to digging then releases the lock
+	public void waitToFill() throws InterruptedException {
+		lock.lock();//Acquires the lock
+		try {
+			while (Filler >= Planter || Filler == hole.length) {
+					System.out.println("Tracy is waiting to fill a hole.");// Checks to see that there are holes to fill
+					Filling.await();
+			}
+			Digging.signal();
+		} finally {
+			lock.unlock(); // Release the lock
+		}
+	}
+	//gets lock fills hole and signal for filling to continue then releases
+        //the lock
+	public void fill() throws InterruptedException {
+		lock.lock(); 
+		try {
+			hole[Filler] = "is filled";
+			Filler++;
+			System.out.println("Tracy filled a hole.       \t\t" + (Filler)); //FIlls hole
+			Filling.signal(); //Continues with the thread execution
+		} finally {
+			lock.unlock(); //Releases lock
+		}
+	}
+	//main for the program
+	public static void main(String args[]) throws InterruptedException {
+		ExecutorService threadExecutor = Executors.newCachedThreadPool();
+		Garden garden = new Garden();
+		threadExecutor.execute(new Jordan(garden));
+		threadExecutor.execute(new Charles(garden));
+		threadExecutor.execute(new Tracy(garden));
+		threadExecutor.shutdown();
+		threadExecutor.awaitTermination(30, TimeUnit.SECONDS);
+	}
+}
+//the run able threads for each class and how long it sleeps or how random 
+//the execution is.
+class Jordan implements Runnable {
+
+	Garden garden;
+	Random rand = new Random();
+
+	public Jordan(Garden g) {
+		this.garden = g;
+	}
+
+	@Override
+	public void run() {
+		try {
+			Thread.sleep(rand.nextInt(1000)); // makes the execution more random
+			for (int i = 0; i < 10; i++) {
+				garden.waitToDig();
+				garden.dig();
+				Thread.sleep(rand.nextInt(100)); // digging
+			}
+		} catch (InterruptedException e) {
+			System.out.println(e);
+			e.printStackTrace();
+			System.exit(1);
+		}
+	}
+}
+
+class Charles implements Runnable {
+
+	Garden garden;
+	Random rand = new Random();
+
+	public Charles(Garden g) {
+		this.garden = g;
+	}
+
+	@Override
+	public void run() {
+		try {
+			Thread.sleep(rand.nextInt(1000)); // makes the execution more random
+			for (int i = 0; i < 10; i++) {
+				garden.waitToPlant();
+				garden.plant();
+				Thread.sleep(rand.nextInt(500)); // digging
+			}
+		} catch (InterruptedException e) {
+			System.out.println(e);
+			e.printStackTrace();
+			System.exit(1);
+		}
+	}
+}
+
+class Tracy implements Runnable {
+
+	Garden garden;
+	Random rand = new Random();
+
+	public Tracy(Garden g) {
+		this.garden = g;
+	}
+
+	@Override
+	public void run() {
+		try {
+			Thread.sleep(rand.nextInt(1000)); // makes the execution more random
+			for (int i = 0; i < 10; i++) {
+				garden.waitToFill();
+				garden.fill();
+				Thread.sleep(rand.nextInt(500)); // digging
+			}
+		} catch (InterruptedException e) {
+			System.out.println(e);
+			e.printStackTrace();
+			System.exit(1);
+		}
+	}
+}
